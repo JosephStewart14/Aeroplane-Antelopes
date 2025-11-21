@@ -79,5 +79,5 @@ for D = D_values
     grid on; axis equal;
     xlabel('x (horizontal distance)');
     ylabel('y (vertical distance)');
-    title(['Paper Plane Trajectory']);
+    title(['Paper Plane Trajectory, D = ', num2str(D)]);
 end
