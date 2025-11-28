@@ -1,0 +1,85 @@
+clear; clc;
+
+D_values = [0, 0.5, 1, 2*sqrt(2), 4];
+
+theta0 = 0.1;
+s0     = 2.0;
+y0 = [theta0; s0];
+
+tspan = [0 20];
+
+for D = D_values
+
+    odefun = @(t, y) [
+        (y(2)^2 - cos(y(1))) / y(2);
+        -sin(y(1)) - D*(y(2)^2)
+    ];
+
+    [t, y] = ode45(odefun, tspan, y0);
+
+    figure;
+    subplot(2,1,1);
+    plot(t, y(:,1),'LineWidth',2);
+    ylabel('\theta(t)');
+    title(['Time Evolution, D = ', num2str(D)]);
+    grid on;
+
+    subplot(2,1,2);
+    plot(t, y(:,2),'LineWidth',2);
+    ylabel('s(t)');
+    xlabel('t');
+    grid on;
+
+    figure; hold on; grid on;
+    xlabel('x = cos\theta');
+    ylabel('y = sin\theta');
+    zlabel('s');
+    title(['Phase Cylinder with Vector Field, D = ', num2str(D)]);
+    axis equal;
+    xlim([-1.1 1.1]);
+    ylim([-1.1 1.1]);
+    view(45,20);
+
+    [th_cyl, s_cyl] = meshgrid(linspace(-pi,pi,80), linspace(0.05,2.0,80));
+    Xc = cos(th_cyl);
+    Yc = sin(th_cyl);
+    Zc = s_cyl;
+    surf(Xc, Yc, Zc, 'FaceAlpha', 0.25, 'EdgeColor', 'none');
+
+    theta = y(:,1);
+    s     = y(:,2);
+
+    plot3(cos(theta), sin(theta), s, 'b-', 'LineWidth', 2);
+
+    [th_grid, s_grid] = meshgrid(linspace(-pi,pi,25), linspace(0.05,2.0,25));
+
+    dth = (s_grid.^2 - cos(th_grid)) ./ s_grid;
+    ds  = -sin(th_grid) - D*(s_grid.^2);
+
+    mag = sqrt(dth.^2 + ds.^2);
+    dth = dth ./ mag;
+    ds  = ds ./ mag;
+
+    xg = cos(th_grid);
+    yg = sin(th_grid);
+    zg = s_grid;
+
+    ux = -sin(th_grid) .* dth;
+    uy =  cos(th_grid) .* dth;
+    uz = ds;
+
+    quiver3(xg, yg, zg, ux, uy, uz, 1.0, 'k');
+
+    figure;
+    vx = y(:,2) .* cos(y(:,1));
+    vy = y(:,2) .* sin(y(:,1));
+
+    xpos = cumtrapz(t, vx);
+    ypos = cumtrapz(t, vy);
+
+    plot(xpos, ypos, 'LineWidth', 2);
+    grid on; axis equal;
+    xlabel('x (horizontal distance)');
+    ylabel('y (vertical distance)');
+    title(['Paper Plane Trajectory']);
+end
