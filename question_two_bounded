@@ -1,0 +1,82 @@
+clear; clc;
+
+%% Parameters
+D_values = [0, 0.5, 1, 2*sqrt(2), 4];
+
+% Initial conditions
+theta0 = wrap_angle(0.1);
+s0     = 2;
+y0 = [theta0; s0];
+
+% Time span
+tspan = [0 20];
+
+for D = D_values
+
+    %% System of ODEs
+    odefun = @(t, y) [
+        (y(2)^2 - cos(y(1))) / y(2);
+        -sin(y(1)) - D*(y(2)^2)
+    ];
+
+    % Solve ODE
+    [t, y] = ode45(odefun, tspan, y0);
+
+    y(:,1) = wrap_angle(y(:,1));
+
+    %% Plot ODE System
+    figure;
+    subplot(2,1,1);
+    plot(t, y(:,1),'LineWidth',2);
+    ylabel('\theta(t)');
+    title(['Time Evolution, D = ', num2str(D)]);
+    grid on;
+
+    subplot(2,1,2);
+    plot(t, y(:,2),'LineWidth',2);
+    ylabel('s(t)');
+    xlabel('t');
+    grid on;
+    
+    %% Vector Field + Phase Portrait
+    figure; hold on; grid on;
+    xlabel('\theta'); ylabel('s');
+    title(['Phase Portrait with Vector Field, D = ', num2str(D)]);
+
+    theta = y(:,1);
+    s     = y(:,2);
+
+    plot(theta, s, 'b-', 'LineWidth', 2);
+
+    [th_grid, s_grid] = meshgrid(linspace(-1.5,1.5,25), linspace(0.05,2.0,25));
+
+    dth = (s_grid.^2 - cos(th_grid)) ./ s_grid;
+    ds  = -sin(th_grid) - D*(s_grid.^2);
+
+    mag = sqrt(dth.^2 + ds.^2);
+    dth = dth ./ mag;
+    ds  = ds ./ mag;
+
+    quiver(th_grid, s_grid, dth, ds, 0.4, 'k');
+
+    legend('Trajectory','Vector Field');
+
+    %% Trajectory in (x, y)
+    vx = y(:,2) .* cos(y(:,1));
+    vy = y(:,2) .* sin(y(:,1));
+
+    xpos = cumtrapz(t, vx);
+    ypos = cumtrapz(t, vy);
+
+    figure;
+    plot(xpos, ypos, 'LineWidth', 2);
+    grid on; axis equal;
+    xlabel('x (horizontal distance)');
+    ylabel('y (vertical distance)');
+    title(['Paper Plane Trajectory']);
+end
+
+%% Angle wrapping function
+function th = wrap_angle(th)
+    th = mod(th + pi, 2*pi) - pi;
+end
