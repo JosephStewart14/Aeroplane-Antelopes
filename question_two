@@ -1,11 +1,12 @@
 clear; clc;
 
 %% Parameter
-D_values = [0, 0.1, 0.5, 1, 4];    
+D_values = [0, 0.5, 1, 2*sqrt(2), 4];    
+%D_values = [0.1];
   
 % Initial conditions
 theta0 = 0.1;
-s0     = 1.0;
+s0     = 2.0;
 y0 = [theta0; s0];
 
 % Time span
@@ -79,5 +80,5 @@ for D = D_values
     grid on; axis equal;
     xlabel('x (horizontal distance)');
     ylabel('y (vertical distance)');
-    title(['Paper Plane Trajectory, D = ', num2str(D)]);
+    title(['Paper Plane Trajectory']);
 end
