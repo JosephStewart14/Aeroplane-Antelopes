@@ -7,8 +7,8 @@ plot(D, s_e, 'Color', [0.2 0.6 1], 'LineWidth', 2);
 
 ylim([0.45 1.05]);
 xlim([0 4]);
-xlabel('D', 'FontSize', 22);
-ylabel('Equilibrium speed s_e(D)', 'FontSize', 22);
+xlabel('D', 'FontSize', 22, 'FontWeight', 'bold');
+ylabel('Equilibrium speed s_e(D)', 'FontSize', 22, 'FontWeight', 'bold');
 %title('Bifurcation Values of D', 'FontSize', 20);
 
 % Phase lines:
@@ -46,4 +46,5 @@ set(gca,'FontSize', 20);
 grid off;
 
 hold off;
+
 
