@@ -1,0 +1,231 @@
+clear; clc; close all;
+
+%% 1. LOAD DATA
+data = [
+0.000	-2.647E-5	7.327E-5
+0.033	9.112E-2	-4.446E-4
+0.067	0.165	-4.070E-3
+0.100	0.242	-9.767E-3
+0.134	0.308	-1.236E-2
+0.167	0.377	-2.012E-2
+0.201	0.440	-2.893E-2
+0.234	0.513	-3.514E-2
+0.268	0.596	-4.239E-2
+0.301	0.674	-5.120E-2
+0.335	0.745	-5.793E-2
+0.368	0.806	-6.207E-2
+0.402	0.866	-7.502E-2
+0.435	0.935	-8.642E-2
+0.469	0.988	-9.522E-2
+0.502	1.061	-0.105
+0.536	1.128	-0.114
+0.569	1.199	-0.123
+0.603	1.251	-0.137
+0.636	1.311	-0.152
+0.670	1.364	-0.164
+0.703	1.426	-0.179
+0.737	1.488	-0.194
+0.770	1.554	-0.212
+0.804	1.602	-0.227
+0.837	1.668	-0.247
+0.871	1.720	-0.264
+0.904	1.771	-0.282
+0.938	1.848	-0.307
+0.971	1.897	-0.324
+1.005	1.950	-0.344
+1.038	2.015	-0.367
+1.072	2.074	-0.390
+1.105	2.129	-0.412
+1.139	2.196	-0.439
+1.172	2.254	-0.463
+1.206	2.328	-0.491
+1.239	2.391	-0.517
+1.273	2.455	-0.544
+1.306	2.512	-0.569
+1.340	2.602	-0.605
+1.373	2.665	-0.632
+1.407	2.732	-0.663
+1.440	2.786	-0.689 ];
+
+t_data = data(:,1);
+x_data = data(:,2);
+y_data = data(:,3);
+
+t0 = t_data(1);
+tf = t_data(end);
+
+% Initial physical position from data
+x0 = x_data(1);
+y0 = y_data(1);
+
+%% Initial Guesses
+% Approximate initial velocity from first few points
+if numel(t_data) >= 3
+    dt0  = t_data(3) - t_data(1);
+    vx0  = (x_data(3) - x_data(1)) / dt0;
+    vy0  = (y_data(3) - y_data(1)) / dt0;
+else
+    dt0  = t_data(2) - t_data(1);
+    vx0  = (x_data(2) - x_data(1)) / dt0;
+    vy0  = (y_data(2) - y_data(1)) / dt0;
+end
+s0_guess     = sqrt(vx0^2 + vy0^2);
+theta0_guess = atan2(vy0, vx0);
+
+% Initial guesses: [D, s0, theta0, k]
+params0 = [0.4, max(s0_guess,0.5), theta0_guess, 1.0];
+
+%% Fit with endpoint-weighted error
+Dmin   = 0.02;   % enforce nonzero drag
+Dmax   = 5.0;
+s0min  = 0.1;
+s0max  = 10.0;
+kmin   = 0.1;
+kmax   = 20.0;
+
+objFun = @(p) traj_error_end_weighted(p, t_data, x0, y0, x_data, y_data, ...
+                                      Dmin, Dmax, s0min, s0max, kmin, kmax);
+
+options = optimset('Display','iter','TolX',1e-4,'TolFun',1e-4);
+bestParams = fminsearch(objFun, params0, options);
+
+D_best     = bestParams(1);
+s0_best    = bestParams(2);
+theta0_best= bestParams(3);
+k_best     = bestParams(4);
+
+fprintf('\nBest-fit parameters:\n');
+fprintf('  D      = %.6f\n', D_best);
+fprintf('  s0     = %.6f\n', s0_best);
+fprintf('  theta0 = %.6f rad (%.2f deg)\n', theta0_best, theta0_best*180/pi);
+fprintf('  k      = %.6f\n', k_best);
+
+%% 4. Simulate best fit and plot
+[x_model, y_model] = simulate_glider_full(bestParams, t_data, x0, y0);
+
+figure;
+plot(x_data, y_data, 'ro', 'MarkerSize', 6, 'DisplayName','Measured data');
+hold on;
+plot(x_model, y_model, 'b-', 'LineWidth', 2, 'DisplayName','Model (best fit)');
+grid on; axis equal;
+xlabel('x (m)');
+ylabel('y (m)');
+ylim([-0.8 0.2]);
+title(sprintf('Measured vs Modelled (D=%.3f, s_0=%.3f, \\theta_0=%.2f^\\circ, k=%.2f)', ...
+    D_best, s0_best, theta0_best, k_best));
+legend('Location','best');
+
+%% Theta and s against time for best fit
+[theta_model, s_model, t_sol] = simulate_state(bestParams, [t0 tf], x0, y0);
+
+figure;
+subplot(2,1,1);
+plot(t_sol, theta_model, 'LineWidth', 2);
+ylabel('\theta(t)'); grid on;
+title('Best-fit state evolution');
+
+subplot(2,1,2);
+plot(t_sol, s_model, 'LineWidth', 2);
+ylabel('s(t)'); xlabel('t'); grid on;
+
+%% Local functions
+
+function err = traj_error_end_weighted(params, t_data, x0, y0, x_data, y_data, ...
+                                       Dmin, Dmax, s0min, s0max, kmin, kmax)
+    D     = params(1);
+    s0    = params(2);
+    theta0= params(3);
+    k     = params(4);
+
+    % Bounds with penalties
+    if D < Dmin || D > Dmax || s0 < s0min || s0 > s0max || ...
+       k < kmin || k > kmax
+        err = 1e9 + (max(0,Dmin-D))^2 + (max(0,s0min-s0))^2 + (max(0,kmin-k))^2;
+        return;
+    end
+
+    try
+        [x_model, y_model] = simulate_glider_full(params, t_data, x0, y0);
+    catch
+        err = 1e9;
+        return;
+    end
+
+    dx = x_model - x_data;
+    dy = y_model - y_data;
+    N  = numel(t_data);
+
+    % Time-dependent weights
+    w_end   = 50;                       
+    w       = linspace(1, w_end, N)';    
+    pt_err  = dx.^2 + dy.^2;
+
+    % Weighted trajectory error
+    err_traj = sum(w .* pt_err);
+
+    % Emphasis on endpoint
+    w_final  = 200;
+    err_end  = w_final * ((dx(end))^2 + (dy(end))^2);
+
+    err = err_traj + err_end;
+end
+
+function [x_model, y_model] = simulate_glider_full(params, t_data, x0, y0)
+    % params = [D, s0, theta0, k]
+    D      = params(1);
+    s0     = params(2);
+    theta0 = params(3);
+    k      = params(4);
+
+    % State: [theta; s; x; y]
+    y_init = [theta0; s0; x0; y0];
+
+    t0 = t_data(1);
+    tf = t_data(end);a
+
+    odefun = @(t,y) glider_ode_scaled(t,y,D,k);
+    [t_sol, y_sol] = ode45(odefun, [t0 tf], y_init);
+
+    theta_sol = y_sol(:,1);
+    s_sol     = y_sol(:,2);
+    x_sol     = y_sol(:,3);
+    y_solp    = y_sol(:,4);
+
+    % Interpolate x,y onto the exact data times
+    x_model = interp1(t_sol, x_sol, t_data, 'linear','extrap');
+    y_model = interp1(t_sol, y_solp, t_data, 'linear','extrap');
+end
+
+function [theta_model, s_model, t_sol] = simulate_state(params, tspan, x0, y0)
+    D      = params(1);
+    s0     = params(2);
+    theta0 = params(3);
+    k      = params(4);
+
+    y_init = [theta0; s0; x0; y0];
+    odefun = @(t,y) glider_ode_scaled(t,y,D,k);
+    [t_sol, y_sol] = ode45(odefun, tspan, y_init);
+
+    theta_model = y_sol(:,1);
+    s_model     = y_sol(:,2);
+end
+
+function dydt = glider_ode_scaled(~, y, D, k)
+    theta = y(1);
+    s     = y(2);
+    x     = y(3); 
+    yy    = y(4);
+
+    if s < 1e-6
+        dtheta = 0;  % avoid division by 0
+    else
+        dtheta = k * (s^2 - cos(theta)) / s;
+    end
+    ds = k * (-sin(theta) - D*s^2);
+
+    % Physical position dynamics with same time scale k
+    dx = k * s * cos(theta);
+    dy = k * s * sin(theta);
+
+    dydt = [dtheta; ds; dx; dy];
+end
