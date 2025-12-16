@@ -8,7 +8,7 @@ odefun = @(t, y) [
 
 % Initial conditions
 theta0 = 0.1;  
-s0     = 2;   
+s0     = 1;   
 y0 = [theta0; s0];
 
 % Time span
@@ -23,7 +23,7 @@ figure(1); clf;
 subplot(2,1,1);
 plot(t, y(:,1),'LineWidth',2);
 ylabel('\theta(t)');
-title('ODE system')
+title('ODE system, (\theta_0, s_0) = (0.1, 1)')
 grid on;
 
 subplot(2,1,2);
@@ -35,8 +35,9 @@ grid on;
 
 %% PLOT VECTOR FIELD
 figure(2); clf; hold on; grid on;
-xlabel('\theta'); ylabel('s');
-title('Phase Portrait with Vector Field');
+set(gca, 'FontSize', 15)
+xlabel('\theta', 'FontSize', 19); ylabel('s', 'FontSize', 19);
+title('Phase Portrait with Vector Field, (\theta_0, s_0) = (0.1, 1)', 'FontSize', 20);
 
 theta = y(:,1);
 s     = y(:,2);
@@ -57,7 +58,8 @@ ds  = ds ./ mag;
 
 % Plot vector field
 quiver(th_grid, s_grid, dth, ds, 0.4, 'k');
-
+xlim([-1 1]);
+ylim([0.6 1.4])
 legend('Trajectory','Vector Field');
 
 %% PLOT TRAJECTORY
@@ -76,4 +78,6 @@ plot(xpos, ypos, 'LineWidth', 2);
 grid on; axis equal;
 xlabel('x (horizontal distance)');
 ylabel('y (vertical distance)');
-title(['Paper Plane Trajectory']);
+%xlim([0 20]);
+%ylim([-1 1]);
+title(['Paper Plane Trajectory, (\theta_0, s_0) = (0.1, 1)']);
