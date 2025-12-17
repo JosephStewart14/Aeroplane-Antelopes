@@ -1,0 +1,219 @@
+function question_four()
+
+clc; clear; close all;
+
+% method comparison
+
+D = 1.5;
+ic = [0.10; 1.20];         
+tspan = [0, 20];
+dtList = [0.5, 0.25, 0.125, 0.0625, 0.03125, 0.015625];
+dtPick = dtList(ceil(numel(dtList)/2));
+
+outTraj = 'fig_traj_comparison.png';
+outConv = 'fig_convergence.png';
+
+opts = odeset('RelTol',1e-11,'AbsTol',1e-12,'Events',@stallEvent);
+[tRef, yRef] = ode45(@(t,y) gliderRhs(t,y,D), tspan, ic, opts);
+if isempty(tRef), error('ode45 reference came back empty.'); end
+
+errE = nan(size(dtList));
+errH = nan(size(dtList));
+errR = nan(size(dtList));
+keep = struct();
+
+for k = 1:numel(dtList)
+    dt = dtList(k);
+
+    [tE, yE] = eulerFixed(@gliderRhs, tspan, ic, dt, D);
+    [tH, yH] = heunFixed(@gliderRhs,  tspan, ic, dt, D);
+    [tR, yR] = rk4Fixed(@gliderRhs,   tspan, ic, dt, D);
+
+    uE = interp1(tE, yE', tRef, 'linear', NaN);
+    uH = interp1(tH, yH', tRef, 'linear', NaN);
+    uR = interp1(tR, yR', tRef, 'linear', NaN);
+
+    bad = any(isnan(uE),2) | any(isnan(uH),2) | any(isnan(uR),2);
+    if any(bad)
+        ok = find(~bad);
+        if isempty(ok), continue; end
+        tUse = tRef(ok);
+        yUse = yRef(ok,:);
+        uE = uE(ok,:); uH = uH(ok,:); uR = uR(ok,:);
+    else
+        tUse = tRef;
+        yUse = yRef;
+    end
+
+    errE(k) = sqrt(trapz(tUse, sum((uE - yUse).^2,2)));
+    errH(k) = sqrt(trapz(tUse, sum((uH - yUse).^2,2)));
+    errR(k) = sqrt(trapz(tUse, sum((uR - yUse).^2,2)));
+
+    if abs(dt - dtPick) < eps
+        keep.tE = tE; keep.yE = yE;
+        keep.tH = tH; keep.yH = yH;
+        keep.tR = tR; keep.yR = yR;
+        keep.dt = dt;
+    end
+end
+
+vE = ~isnan(errE); vH = ~isnan(errH); vR = ~isnan(errR);
+sE = polyfit(log(dtList(vE)), log(errE(vE)), 1); sE = sE(1);
+sH = polyfit(log(dtList(vH)), log(errH(vH)), 1); sH = sH(1);
+sR = polyfit(log(dtList(vR)), log(errR(vR)), 1); sR = sR(1);
+
+
+fig1 = figure('Units','centimeters','Position',[2 2 15 9],'Color','w'); hold on;
+
+wrap = @(th) mod(th + pi, 2*pi) - pi;
+plot(wrap(yRef(:,1)), yRef(:,2), 'k-', 'LineWidth', 1.8);
+
+plot(wrap(keep.yE(1,:)), keep.yE(2,:), 'r--o','LineWidth',1.2,'MarkerSize',4,'MarkerFaceColor','none');
+plot(wrap(keep.yH(1,:)), keep.yH(2,:), 'b-.s','LineWidth',1.2,'MarkerSize',4,'MarkerFaceColor','none');
+plot(wrap(keep.yR(1,:)), keep.yR(2,:), 'g-d', 'LineWidth',1.4,'MarkerSize',4,'MarkerFaceColor','none');
+
+legend({'ode45 (reference)', ...
+        sprintf('Euler (dt=%.4g)', keep.dt), ...
+        sprintf('Heun / RK2 (dt=%.4g)', keep.dt), ...
+        sprintf('RK4 (dt=%.4g)', keep.dt)}, ...
+        'Location','best');
+
+xlabel('\theta', 'FontSize', 12, 'FontWeight', 'bold');
+ylabel('s',       'FontSize', 12, 'FontWeight', 'bold');
+
+grid on; box on;
+set(gca,'FontSize',10);
+set(gca,'LooseInset',max(get(gca,'TightInset'),0.02));
+exportgraphics(fig1, outTraj, 'Resolution', 300);
+
+
+fig2 = figure('Units','centimeters','Position',[2 2 15 9],'Color','w'); hold on;
+
+loglog(dtList(vE), errE(vE), 'ro-','LineWidth',1.4,'MarkerSize',6);
+loglog(dtList(vH), errH(vH), 'bs-','LineWidth',1.4,'MarkerSize',6);
+loglog(dtList(vR), errR(vR), 'gd-','LineWidth',1.4,'MarkerSize',6);
+
+i = find(vE,1); C = errE(i)/(dtList(i)^1); xx = [dtList(i), 2*dtList(i)];
+loglog(xx, C*xx.^1, 'r--','LineWidth',1);
+
+i = find(vH,1); C = errH(i)/(dtList(i)^2); xx = [dtList(i), 2*dtList(i)];
+loglog(xx, C*xx.^2, 'b--','LineWidth',1);
+
+i = find(vR,1); C = errR(i)/(dtList(i)^4); xx = [dtList(i), 2*dtList(i)];
+loglog(xx, C*xx.^4, 'g--','LineWidth',1);
+
+hRef = plot(nan,nan,'r--','LineWidth',1); 
+
+xlabel('\Delta t', 'FontSize', 12, 'FontWeight', 'bold');
+ylabel('L^2 error',  'FontSize', 12, 'FontWeight', 'bold');
+
+legend({'Euler','Heun / RK2','RK4','Reference slopes (dashed)'}, 'Location','northwest');
+
+grid on; box on;
+set(gca,'FontSize',10,'XMinorTick','on','YMinorTick','on');
+axis padded
+set(gca,'LooseInset',max(get(gca,'TightInset'),0.02));
+
+txt = sprintf('Observed slopes: Euler \\approx %.2f, RK2 \\approx %.2f, RK4 \\approx %.2f', sE, sH, sR);
+annotation('textbox', [0.12, 0.78, 0.75, 0.10], 'String', txt, ...
+    'EdgeColor','none', 'FontSize', 10, 'BackgroundColor','white', 'Interpreter','tex');
+
+exportgraphics(fig2, outConv, 'Resolution', 300);
+
+% flight regimes
+
+dt = 0.01;
+
+icGlide = [0.05; 1.10];
+icDive  = [-0.35; 1.00];
+icStall = [0.10; 0.35];
+
+[~, y1] = rk4Fixed(@gliderRhs, tspan, icGlide, dt, D);
+[~, y2] = rk4Fixed(@gliderRhs, tspan, icDive,  dt, D);
+[~, y3] = rk4Fixed(@gliderRhs, tspan, icStall, dt, D);
+
+th1 = wrap(y1(1,:)); s1 = y1(2,:);
+th2 = wrap(y2(1,:)); s2 = y2(2,:);
+th3 = wrap(y3(1,:)); s3 = y3(2,:);
+
+figure('Units','centimeters','Position',[2 2 14 9],'Color','w'); hold on;
+plot(th1, s1, 'g-', 'LineWidth', 1.4);
+plot(th2, s2, 'b-', 'LineWidth', 1.4);
+plot(th3, s3, 'r-', 'LineWidth', 1.4);
+
+xlabel('\theta', 'FontSize', 12, 'FontWeight', 'bold');
+ylabel('s',       'FontSize', 12, 'FontWeight', 'bold');
+
+grid on; box on;
+legend({'Near–steady glide','Dive from negative pitch','Stall (low speed)'}, 'Location','best');
+
+exportgraphics(gcf, 'fig_flight_regimes.png', 'Resolution', 300);
+
+fprintf('Saved:\n  %s\n  %s\n  fig_flight_regimes.png\n', outTraj, outConv);
+
+end
+
+
+function dY = gliderRhs(~, Y, D)
+th = Y(1); s = Y(2);
+sEff = s; if s <= 0, sEff = 1e-8; end
+dth = (s^2 - cos(th)) / sEff;
+ds  = -sin(th) - D*s^2;
+dY = [dth; ds];
+end
+
+function [value,isterminal,direction] = stallEvent(~, Y)
+value = Y(2) - 1e-4;
+isterminal = 1;
+direction  = -1;
+end
+
+function [T,Y] = eulerFixed(rhs, tspan, y0, dt, D)
+t0 = tspan(1); tf = tspan(2);
+N = ceil((tf - t0)/dt);
+T = t0 + (0:N)*dt;
+Y = zeros(numel(y0), N+1);
+Y(:,1) = y0;
+for k = 1:N
+    Y(:,k+1) = Y(:,k) + dt*rhs(T(k), Y(:,k), D);
+    if Y(2,k+1) <= 1e-6
+        T = T(1:k+1); Y = Y(:,1:k+1); break
+    end
+end
+end
+
+function [T,Y] = heunFixed(rhs, tspan, y0, dt, D)
+t0 = tspan(1); tf = tspan(2);
+N = ceil((tf - t0)/dt);
+T = t0 + (0:N)*dt;
+Y = zeros(numel(y0), N+1);
+Y(:,1) = y0;
+for k = 1:N
+    y = Y(:,k); tk = T(k);
+    k1 = rhs(tk, y, D);
+    k2 = rhs(tk+dt, y + dt*k1, D);
+    Y(:,k+1) = y + 0.5*dt*(k1 + k2);
+    if Y(2,k+1) <= 1e-6
+        T = T(1:k+1); Y = Y(:,1:k+1); break
+    end
+end
+end
+
+function [T,Y] = rk4Fixed(rhs, tspan, y0, dt, D)
+t0 = tspan(1); tf = tspan(2);
+N = ceil((tf - t0)/dt);
+T = t0 + (0:N)*dt;
+Y = zeros(numel(y0), N+1);
+Y(:,1) = y0;
+for k = 1:N
+    y = Y(:,k); tk = T(k);
+    k1 = rhs(tk, y, D);
+    k2 = rhs(tk+dt/2, y + (dt/2)*k1, D);
+    k3 = rhs(tk+dt/2, y + (dt/2)*k2, D);
+    k4 = rhs(tk+dt,   y + dt*k3, D);
+    Y(:,k+1) = y + (dt/6)*(k1 + 2*k2 + 2*k3 + k4);
+    if Y(2,k+1) <= 1e-6
+        T = T(1:k+1); Y = Y(:,1:k+1); break
+    end
+end
+end
